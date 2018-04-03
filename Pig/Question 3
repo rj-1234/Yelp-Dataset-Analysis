@@ -1,0 +1,21 @@
+%pig
+REGISTER '/home/change/Documents/elephant-bird-core-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-hadoop-compat-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-pig-4.15.jar'
+REGISTER '/home/change/Documents/json-simple-1.1.1.jar'
+
+A = LOAD '/home/change/Documents/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (business: map[]);
+
+Business = FOREACH A GENERATE (float)yelp#'stars' AS stars, FLATTEN(yelp#'categories') as categories, (double)yelp#'latitude' AS latitude, (double)yelp#'longitude' AS longitude;
+
+filterlatlong = FILTER Business BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 <= 15;
+
+groupcitycat = GROUP filterlatlong BY categories;
+
+result = FOREACH groupcitycat GENERATE FLATTEN(group) as categories, AVG(filterlatlong.stars) as st;
+
+outputer = ORDER result BY categories, st DESC;
+
+DUMP result
+
+

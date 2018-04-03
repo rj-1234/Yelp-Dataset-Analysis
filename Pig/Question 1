@@ -1,0 +1,31 @@
+%pig
+REGISTER '/home/change/Documents/elephant-bird-core-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-hadoop-compat-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-pig-4.15.jar'
+REGISTER '/home/change/Documents/json-simple-1.1.1.jar'
+
+A = LOAD '/home/change/Documents/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (yelp: map[]);
+
+Business = FOREACH A GENERATE yelp#'categories' as categories, yelp#'state' as state, yelp#'business_id' as business_id, yelp#'city' as city;
+
+Filtered_Business = FILTER Business BY state IN ('AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY');
+
+Final_Business = FOREACH Filtered_Business GENERATE categories, city, business_id;
+
+B = LOAD '/home/change/Documents/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (yelpreview: map[]);
+
+Review = FOREACH B GENERATE yelpreview#'business_id' as business_id, yelpreview#'review_id' as review_id;
+
+connect = JOIN Final_Business by business_id, pullReview by business_id;
+
+Flattenning = FOREACH connect GENERATE city, FLATTEN(categories);
+
+create_group = GROUP Flattenning by (city, categories);
+
+Results = FOREACH create_group GENERATE FLATTEN(group) AS (city,categories), COUNT(Flattenning); 
+
+Final_Result = ORDER Results by city;
+
+--DUMP Final_Results;
+
+STORE Final_Result INTO '/home/change/Documents/test/Answer_1.tsv';

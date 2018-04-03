@@ -1,0 +1,23 @@
+%pig
+
+REGISTER '/home/change/Documents/elephant-bird-core-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-hadoop-compat-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-pig-4.15.jar'
+REGISTER '/home/change/Documents/json-simple-1.1.1.jar'
+
+load_business = LOAD '/home/change/Documents/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (business: map[]);
+
+Business = FOREACH load_business GENERATE FLATTEN(business#'categories') as categories, (float)business#'stars' as stars, business#'city' as city;
+
+gen = FOREACH Business GENERATE city, categories, stars;
+--x = LIMIT gen 1000;
+--dump x;
+
+create_group = GROUP gen by (categories, city);
+Result = FOREACH create_group GENERATE FLATTEN(group) AS (categories, city), AVG(gen.stars) AS Ranks;
+
+Final_Result = ORDER Result BY categories, Ranks DESC;
+DUMP Final_Result;
+
+STORE Final_Result INTO '/home/change/Documents/test/Answer_2.tsv';
+

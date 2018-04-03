@@ -1,0 +1,50 @@
+%pig
+REGISTER '/home/change/Documents/elephant-bird-core-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-hadoop-compat-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-pig-4.15.jar'
+REGISTER '/home/change/Documents/json-simple-1.1.1.jar'
+
+data_user = LOAD '/home/change/Documents/dataset/user.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (json:map[]);
+
+data_review = LOAD '/home/change/Documents/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (json:map[]);
+
+data_business = LOAD '/home/change/Documents/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (json:map[]);
+
+at_user = FOREACH data_user GENERATE json#'user_id' AS user_id, (int)json#'review_count' as review_count, json#'name' AS name;
+
+at_review = FOREACH data_review GENERATE json#'user_id' AS user_id, json#'review_id' as review_id, json#'business_id' as business_id, (float)json#'stars' AS star;
+
+Business = FOREACH data_business GENERATE json#'business_id' AS bid, FLATTEN (json#'categories') as categories, (float)json#'latitude' AS latitude, (float)json#'longitude' AS longitude;
+
+DESCRIBE at_user;
+
+DESCRIBE at_review;
+
+DESCRIBE Business;
+
+at_business = FILTER Business BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 < 15; 
+
+DESCRIBE at_business;
+
+combine_busi_rev = JOIN at_business BY bid, at_review BY business_id;
+
+DESCRIBE combine_busi_rev;
+
+total_combine = JOIN combine_busi_rev BY at_review::user_id, at_user BY user_id;
+
+DESCRIBE total_combine;
+
+get_reqd = FOREACH total_combine GENERATE combine_busi_rev::at_business::categories AS categories, 
+combine_busi_rev::at_review::star AS stars,combine_busi_rev::at_review::user_id as user_id, at_user::review_count AS review_count;
+
+get_reqd = ORDER get_reqd BY review_count DESC;
+
+DESCRIBE get_reqd;
+DUMP get_reqd;
+
+grouping = GROUP get_reqd BY (user_id, categories);
+Result = FOREACH grouping GENERATE FLATTEN(group) AS (user_id, categories), AVG(get_reqd.stars) AS rank;
+Results = LIMIT Result 10;
+DUMP Results;
+
+

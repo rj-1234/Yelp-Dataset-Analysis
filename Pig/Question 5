@@ -1,0 +1,50 @@
+
+REGISTER '/home/change/Documents/elephant-bird-core-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-hadoop-compat-4.15.jar'
+REGISTER '/home/change/Documents/elephant-bird-pig-4.15.jar'
+REGISTER '/home/change/Documents/json-simple-1.1.1.jar'
+
+
+A = LOAD '/home/change/Documents/dataset/business.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad') AS (busi: map[]);
+
+Busi = FOREACH A GENERATE (float)busi#'stars' AS stars, busi#'categories' as categories,busi#'business_id' as business_id, (double)busi#'latitude' AS latitude, (double)busi#'longitude' AS longitude, busi#'name' AS name;
+
+Filtered_Busi = FILTER Busi BY ACOS(SIN((55.9469753*3.14)/180)*SIN((latitude*3.14)/180) + COS((55.9469753*3.14)/180)*COS((latitude*3.14)/180)*COS(((-3.2096308 - longitude)*3.14)/180))*6371 <= 15 ;
+
+Busi_range = FOREACH Filtered_Busi GENERATE name, stars, business_id, org.apache.pig.builtin.BagToString(TOBAG(categories)) as category; 
+filtered = FILTER Busi_range BY category matches '.*Food.*';
+
+ordered_busi = ORDER filtered by stars DESC;
+
+limited_top = limit ordered_busi 10;
+
+DESCRIBE limited_top;
+
+review = LOAD '/home/change/Documents/dataset/review.json' USING com.twitter.elephantbird.pig.load.JsonLoader('-nestedLoad=true ') AS (review: map[]); 
+
+at_rev = FOREACH review GENERATE (float)review#'rating' as ratings, review#'business_id' as business_id, (datetime)review#'date' AS date;
+
+filtered_review = FILTER at_rev BY (GetMonth(date)==1) OR (GetMonth(date)==2) OR (GetMonth(date)==3) OR (GetMonth(date)==4) OR (GetMonth(date)==5);
+
+combine = JOIN limited_top by business_id, filtered_review by business_id;
+
+top_combined = FOREACH combine GENERATE $0 as name, $1 as ratings, $5 as business_id; 
+
+grouping_top = GROUP top_combined by (business_id, name);
+
+result_top = FOREACH grouping_top GENERATE FLATTEN (group) as (business_id, name), AVG(top_combined.ratings);
+
+DUMP result_top
+
+bottom_ordered = ORDER filtered by stars;
+limited_bottom = limit bottom_ordered 10;
+
+combine_bottom = JOIN limited_bottom by business_id, filtered_review by business_id;
+bottom_combined = FOREACH combine_bottom GENERATE $0 as name, $1 as ratings, $5 as business_id; 
+
+grouping_bottom = GROUP bottom_combined by (business_id, name);
+
+flattening_bottom = FOREACH grouping_bottom GENERATE FLATTEN (group) as (business_id, name), AVG(bottom_combined.ratings) as ranking;
+result_bottom = ORDER flattening_bottom by ranking DESC;
+
+DUMP result_bottom
